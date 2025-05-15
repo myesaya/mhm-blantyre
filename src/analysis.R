@@ -169,4 +169,47 @@ df_clean |>
   save_as_docx(path = "~/gitrepos/mhm-blantyre/result/summary.docx")
 
 
+# Objective 1: Knowledge --------------------------------------------------
 
+
+df_clean |> 
+  select(rularity, before_you_had_your_w_about_menstruation,
+have_you_ever_receiv_struation_in_school,during_your_last_men_k_pains_and_cramping,
+from_one_menstrual_p_y_to_become_pregnant,i_was_able_to_wash_m_nds_when_l_wanted_to,
+i_was_able_to_wash_m_ina_when_l_wanted_to,i_was_able_to_wash_m_often_as_l_wanted_to,
+i_felt_clean_during_my_last_period
+,i_was_able_to_dispos_way_that_l_wanted_to) |> 
+  tbl_summary(by=rularity,
+              missing = "no",
+              label=list(before_you_had_your_w_about_menstruation~"Knew about menstruation before",
+                         have_you_ever_receiv_struation_in_school="Received education on Menstruation",
+                         during_your_last_men_k_pains_and_cramping="Able to reduce mentruation pains",
+                         from_one_menstrual_p_y_to_become_pregnant="Days of becoming pregnant after mensruation",
+                         i_was_able_to_wash_m_nds_when_l_wanted_to="Able to Wash hands when I wanted to",
+                         i_was_able_to_wash_m_ina_when_l_wanted_to="Able to wash my vagina when i wanted to",
+                         i_was_able_to_wash_m_often_as_l_wanted_to="Able to wash hands and vagina when i wanted to",
+                         i_was_able_to_dispos_way_that_l_wanted_to="Able to properly dispose menstrual materials")) |> 
+  add_p() |> 
+  bold_p() |> 
+  separate_p_footnotes()|>  
+  modify_header(label ~ "**Variable**") |>                     
+  as_flex_table() |> 
+  save_as_docx(path = "~/gitrepos/mhm-blantyre/result/Knowledge onMHM chi.docx")
+
+
+#obective 3
+graph<-df_clean |>
+  clean_names() |> 
+  select(clean:soap_available) |> 
+  drop_na()
+
+df_clean$clean
+
+## Your target label (change this to the label you're looking for)
+target_label <-  "I was able to dispose of my menstrual materials in the way that l wanted to"
+
+# Find variable(s) in df_clean with that exact label
+matching_vars <- names(df_clean)[sapply(df_clean, function(x) var_label(x) == target_label)]
+
+# Print results in console
+print(matching_vars)
