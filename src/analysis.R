@@ -420,14 +420,58 @@ matching_vars <- names(df_clean)[sapply(df_clean, function(x) var_label(x) == ta
 # Print results in console
 print(matching_vars)
 
+# Load necessary packages
+library(dplyr)
+library(tidyr)
+library(networkD3)
+rm(list = setdiff(ls(), "df_clean"))
+# Load packages
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggalluvial)
+library(scales)
+df <- df_clean %>%
+  select(what_material_did_yo_ead_options_out_loud,
+         during_your_last_men_materials_after_use_flush_toilet:
+           during_your_last_men_materials_after_use_other) %>%
+  drop_na()
+
+df_long <- df %>%
+  tidyr::pivot_longer(cols = during_your_last_men_materials_after_use_flush_toilet:
+                        during_your_last_men_materials_after_use_other, 
+                      names_to = "disposal_method", 
+                      values_to = "used") %>%
+  filter(used == 1)
+
+df_long<-df_long |> 
+  mutate(disposal_method=fct_recode(disposal_method,
+                                   "Burning"="during_your_last_men_materials_after_use_burning",
+                                    "Flush toilet"="during_your_last_men_materials_after_use_flush_toilet",
+                                    "Pit Latrine"="during_your_last_men_materials_after_use_latrine",
+                                    "Other"="during_your_last_men_materials_after_use_other",
+                                    "Trash Bag"="during_your_last_men_materials_after_use_trash_bag"))
+
+df_long<-df_long |> 
+  rename(pad_type=what_material_did_yo_ead_options_out_loud)
+
+# Fake reproducible data
 
 
+# Reshape to long format
 
 
+# Summarise flows
+flow_data <- df_long %>%
+  group_by(pad_type, disposal_method) %>%
+  summarise(flow = n(), .groups = "drop") %>%
+  group_by(pad_type) %>%
+  mutate(
+    percent = round(100 * flow / sum(flow), 1),
+    label = paste0(percent, "%")
+  ) %>%
+  ungroup()
 
 
-df_clean <- df_clean |> 
-  mutate(rularity2 = factor(rularity2, 
-                            levels = c("Urban",
-                                       "Rural"))) #if rularity 2, then make Urban as the reference
-
+#i just want a 100% stacked bar chart,
+#with X as the disposal methods and Y the pad types
