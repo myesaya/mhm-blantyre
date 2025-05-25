@@ -10,6 +10,10 @@ library(dplyr)
 library(ggplot2)
 library(treemapify)
 library(ggalluvial)
+library(ggthemes)
+library(ggplot2)
+library(gt)
+library(gtsummary)
 
 
 # data import -------------------------------------------------------------
@@ -154,10 +158,31 @@ df_clean<-df_clean |>
   mutate(how_old_were_you_whe_rst_menstrual_period=fct_recode(how_old_were_you_whe_rst_menstrual_period,
                                                               "13 and 15"="Over 15"))
 # Demographics table  ------------------------------------------------------
+df_clean <- df_clean |> 
+  mutate(identity = case_when(
+    age <= 15 ~ "Student",
+    age >= 16~ "Community"
+  )) |> 
+  relocate(identity,
+          .after = age) 
+student <- df_clean |>
+  filter(identity == "Student") |>
+  select(identity, age) |>
+  mutate(age = as.factor(age))
+
+
+
+levels(student$age)
+
+
+
+
+glimpse(df_clean)
 df_clean |> 
   select(
     rularity, 
-    age, 
+    age,
+    identity,
     marital_status, 
     how_old_were_you_whe_rst_menstrual_period,
     have_you_had_a_menst_in_the_past_6_months,
@@ -219,6 +244,7 @@ i_felt_clean_during_my_last_period
 
 
 #obective 3
+#plot version 1
 plot<-df_clean |>
   clean_names() |> 
   select(rularity,clean:soap_available) |> 
@@ -280,6 +306,72 @@ mhm<-ggplot(yes_counts_percent, aes(x = reorder(Variable, -Percent), y = Percent
 
 ggsave("MHM rooms2.pdf",
        plot = mhm,
+       width = 9, height = 6,
+       units = "in", device = "pdf")
+
+#plot version 2
+plot<-df_clean |>
+  clean_names() |> 
+  select(rularity2,clean:soap_available) |> 
+  drop_na() |> 
+  mutate(id=row_number())
+
+#make a plot
+plot_long <- plot |> 
+  pivot_longer(cols = clean:soap_available,
+               names_to = "Variable", 
+               values_to = "Response")  # Convert to long format
+
+yes_counts_percent <- plot_long %>%
+  filter(Response == "1") %>%  # Only keep "Yes" responses
+  group_by(rularity2, Variable) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  group_by(rularity2) %>%
+  mutate(
+    Percent = 100 * Count / sum(Count)  # Total % per rurality adds to 100
+  ) %>%
+  ungroup()
+
+
+
+yes_counts_percent<-yes_counts_percent |> 
+  mutate(Variable=fct_recode(Variable,
+                             "Clean"="clean",
+                             "Adequate water"="water_available",
+                             "Safe"="safe",
+                             "Private"="private",
+                             "Treatment"="treatment",
+                             "Soap available"="soap_available"))
+
+
+
+# Plot the data
+access<-ggplot(yes_counts_percent, aes(x = reorder(Variable, -Percent), y = Percent, fill = rularity2)) +
+  geom_col(width = 0.5, position = position_dodge()) +
+  geom_text(aes(label = sprintf("%.1f%%", Percent)),
+            vjust = -0.5, size = 5, fontface = "bold", position = position_dodge(width = 0.6)) +
+  scale_y_continuous(limits = c(0, 30), breaks = seq(0, 100, 5)) +  # Ensure Y-axis goes up to 100%
+  labs(title="Respondents who had access to menstruation management facilities",
+       x = "Characteristics",
+       y = "Percentage (%)") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold", color = "black"),  # Black title
+    axis.title.x = element_text(hjust = 0.5, size = 14, color = "black", face = "bold"),  # Black X-axis title
+    axis.title.y = element_text(hjust = 0.5, size = 14, color = "black"),  # Black Y-axis title
+    axis.text.x = element_text(size = 13, color = "black", angle = 45, hjust = 1),  # Black X-axis text
+    axis.text.y = element_text(size = 13, color = "black"),
+    legend.position = "top",
+    legend.justification = "center",
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 12),  # Increase legend text size
+    legend.title = element_text(size = 14)   # Increase legend title size
+  ) +
+  guides(fill = guide_legend(title = "Location"))  # Title is already set in theme
+
+
+ggsave("access.pdf",
+       plot = access,
        width = 9, height = 6,
        units = "in", device = "pdf")
 
@@ -411,14 +503,8 @@ df <- tibble(
 
 
 
-## Your broom## Your target label (change this to the label you're looking for)
-target_label <-  "During your last menstrual period, where did you dispose of your menstrual materials after use?"
 
-# Find variable(s) in df_clean with that exact label
-matching_vars <- names(df_clean)[sapply(df_clean, function(x) var_label(x) == target_label)]
 
-# Print results in console
-print(matching_vars)
 
 # Load necessary packages
 library(dplyr)
@@ -431,47 +517,395 @@ library(tidyr)
 library(ggplot2)
 library(ggalluvial)
 library(scales)
-df <- df_clean %>%
-  select(what_material_did_yo_ead_options_out_loud,
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(forcats)
+
+# Reshape and clean
+bar <- df_clean %>%
+  select(rularity, 
          during_your_last_men_materials_after_use_flush_toilet:
            during_your_last_men_materials_after_use_other) %>%
-  drop_na()
-
-df_long <- df %>%
-  tidyr::pivot_longer(cols = during_your_last_men_materials_after_use_flush_toilet:
-                        during_your_last_men_materials_after_use_other, 
-                      names_to = "disposal_method", 
-                      values_to = "used") %>%
-  filter(used == 1)
-
-df_long<-df_long |> 
-  mutate(disposal_method=fct_recode(disposal_method,
-                                   "Burning"="during_your_last_men_materials_after_use_burning",
-                                    "Flush toilet"="during_your_last_men_materials_after_use_flush_toilet",
-                                    "Pit Latrine"="during_your_last_men_materials_after_use_latrine",
-                                    "Other"="during_your_last_men_materials_after_use_other",
-                                    "Trash Bag"="during_your_last_men_materials_after_use_trash_bag"))
-
-df_long<-df_long |> 
-  rename(pad_type=what_material_did_yo_ead_options_out_loud)
-
-# Fake reproducible data
+  drop_na() %>%
+  mutate(id = row_number())
 
 
-# Reshape to long format
-
-
-# Summarise flows
-flow_data <- df_long %>%
-  group_by(pad_type, disposal_method) %>%
-  summarise(flow = n(), .groups = "drop") %>%
-  group_by(pad_type) %>%
+bar_long <- bar %>%
+  pivot_longer(cols = during_your_last_men_materials_after_use_flush_toilet:
+                 during_your_last_men_materials_after_use_other,
+               names_to = "disposal_method",
+               values_to = "used") %>%
+  filter(used == 1) %>%
+  mutate(disposal_method = fct_recode(disposal_method,
+                                      "Burning"     = "during_your_last_men_materials_after_use_burning",
+                                      "Flush toilet" = "during_your_last_men_materials_after_use_flush_toilet",
+                                      "Pit Latrine" = "during_your_last_men_materials_after_use_latrine",
+                                      "Other"       = "during_your_last_men_materials_after_use_other",
+                                      "Trash Bag"   = "during_your_last_men_materials_after_use_trash_bag"))
+bar_long <- bar_long %>%
   mutate(
-    percent = round(100 * flow / sum(flow), 1),
-    label = paste0(percent, "%")
-  ) %>%
-  ungroup()
+    rularity = case_when(
+      disposal_method %in% c("Flush toilet", "Trash Bag") ~ "Urban",
+      TRUE ~ rularity
+    )
+  )
+library(forcats)
+
+bar_long <- bar_long |> 
+  mutate(disposal_method = fct_relevel(disposal_method,
+                                       "Other",
+                                       "Pit Latrine",
+                                       "Burning",
+                                       "Flush toilet",
+                                       "Trash Bag"))
 
 
-#i just want a 100% stacked bar chart,
-#with X as the disposal methods and Y the pad types
+
+
+#######plotting
+plot<-bar_long |>
+  group_by(rularity, disposal_method) |>
+  summarise(
+    Count = n(),
+    Percentage = (Count / n_distinct(bar$id)) * 100
+  ) |>
+  ggplot(aes(x = disposal_method, y = Percentage, fill = rularity)) +
+  geom_col(width = 0.5, position = position_dodge()) +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)),
+            vjust = -0.5, size = 5, fontface = "bold", position = position_dodge(width = 0.6)) +
+  scale_y_continuous(limits = c(0, 35), breaks = seq(0, 100, 5)) +  # Ensure Y-axis goes up to 100%
+  labs(title="Disposal methods for menstral materials",
+       x = "Disposal methods",
+       y = "Percentage (%)") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold", color = "black"),  # Black title
+    axis.title.x = element_text(hjust = 0.5, size = 14, color = "black", face = "bold"),  # Black X-axis title
+    axis.title.y = element_text(hjust = 0.5, size = 14, color = "black"),  # Black Y-axis title
+    axis.text.x = element_text(size = 13, color = "black", angle = 45, hjust = 1),  # Black X-axis text
+    axis.text.y = element_text(size = 13, color = "black"),
+    legend.position = "top",
+    legend.justification = "center",
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 12),  # Increase legend text size
+    legend.title = element_text(size = 14)   # Increase legend title size
+  ) +
+  guides(fill = guide_legend(title = "Location"))  # Title is already set in theme
+
+
+ggsave("Disposal methods.pdf",
+       plot = plot,
+       width = 9, height = 6,
+       units = "in", device = "pdf")
+
+# Calculate mean/sd *separately* for rural and urban  
+group_stats <- df_clean |>  
+  filter(during_your_last_men_you_miss_school_work > 0 &  
+           during_your_last_men_you_miss_school_work < 6) |>  
+  group_by(rularity) |>  
+  summarise(  
+    mean = mean(during_your_last_men_you_miss_school_work, na.rm = TRUE),  
+    sd = sd(during_your_last_men_you_miss_school_work, na.rm = TRUE),  
+    n = n()  
+  )  
+
+# Merge stats back into filtered data  
+filtered_data <- df_clean |>  
+  filter(during_your_last_men_you_miss_school_work > 0 &  
+           during_your_last_men_you_miss_school_work < 6) |>  
+  left_join(group_stats, by = "rularity")  
+
+# Plot with corrected normal curves  
+hist<-ggplot(filtered_data, aes(x = during_your_last_men_you_miss_school_work)) +  
+  geom_histogram(aes(y = after_stat(count)), binwidth = 1, fill = "skyblue", color = "black") +  
+  geom_line(  
+    data = data.frame(  
+      x = rep(seq(1, 5, 0.1), 2),  
+      rularity = rep(c("Rural", "Urban"), each = 41)  
+    ) |>  
+      left_join(group_stats, by = "rularity"),  
+    aes(  
+      x = x,  
+      y = dnorm(x, mean, sd) * n * 1  
+    ),  
+    color = "red",  
+    size = 1  
+  ) +  
+  scale_x_continuous(breaks = seq(1, 5, 1)) +  
+  # Adjust Y-axis limits and breaks here:  
+  scale_y_continuous(  
+    breaks = c(0, 10, 20, 30),  
+    limits = c(0, 30)  # Extend upper limit to 40  
+  ) +  
+  labs(  
+    title = "school/Social work days missed during last menstruation",  
+    x = "Number of days",  
+    y = "Frequency"  
+  ) +  
+  theme_minimal() +  
+  facet_wrap(~rularity)  
+ggsave("days missed_final.pdf",
+       plot = hist,
+       width = 9, height = 5,
+       units = "in", device = "pdf")
+
+#select df
+
+phyco<-df_clean |> 
+  select(rularity,
+i_worry_that_my_mens_ugh_my_outer_garment,
+i_worried_that_my_me_e_l_was_wearing_them,
+i_was_satisfied_with_menstrual_materials,
+i_was_worried_that_s_l_was_not_using_them,
+i_worried_about_wher_menstrual_materials,
+when_at_home_i_worr_menstrual_materials,
+when_at_home_i_worr_menstrual_materials,
+when_at_school_i_wa_menstrual_materials,
+when_at_school_home_o_not_have_my_period) 
+
+# Calculate alpha for knowledge items
+
+likert_levels <- c("Never",  "Sometimes", "Often" , "Always"  )
+levels(phyco$i_worry_that_my_mens_ugh_my_outer_garment)
+
+likert_levels <- c("Always", "Often", "Sometimes", "Never")
+likert_levels <- c("Always", "Often", "Sometimes", "Never")
+
+alpha_knowledge <- phyco %>%
+  mutate(across(
+    .cols = c(
+      i_worry_that_my_mens_ugh_my_outer_garment,
+      i_worried_that_my_me_e_l_was_wearing_them,
+      i_was_satisfied_with_menstrual_materials,
+      i_was_worried_that_s_l_was_not_using_them,
+      i_worried_about_wher_menstrual_materials,
+      when_at_home_i_worr_menstrual_materials,
+      when_at_school_i_wa_menstrual_materials,
+      when_at_school_home_o_not_have_my_period
+    ),
+    .fns = ~ as.numeric(factor(.x, levels = likert_levels, ordered = TRUE))
+  ))
+
+
+  psych::alpha()
+  
+alpha_knowledge
+
+######the alpha formated
+# Assuming you already have alpha_knowledge
+alpha_val <- alpha_knowledge$total$raw_alpha
+n_items <- alpha_knowledge$total$nvar
+n_obs <- alpha_knowledge$total$n.obs
+mean_r <- alpha_knowledge$total$average_r
+
+# Extract key summary values
+alpha_knowledge_summary <- tibble(
+  `Scale` = "Knowledge",
+  `Number of Items` = alpha_knowledge$total$nvar,
+  `Number of Observations` = alpha_knowledge$total$n.obs,
+  `Average Inter-Item Correlation` = round(alpha_knowledge$total$average_r, 3),
+  `Cronbach's Alpha` = round(alpha_knowledge$total$raw_alpha, 3)
+)
+
+# Format into a gt table
+gt_table<-alpha_knowledge_summary %>%
+  gt() %>%
+  tab_header(
+    title = "Reliability Scale: Cronbach's Alpha Summary"
+    
+  )
+gt_table
+
+# Save the gt table to a Word document
+gtsave(gt_table, filename = "combined_alpha_summary.docx")
+
+library(gtsummary)
+
+library(gtsummary)
+
+
+
+alpha_knowledge |> 
+  tbl_summary(
+    by = "rularity",
+    # Explicitly define variable types
+    type = list(everything() ~ "continuous"),  # Force all variables as continuous
+    # Format statistics for continuous variables
+    statistic = all_continuous() ~ "{median} ({p25}, {p75})",
+    missing = 'no'
+  ) |> 
+  add_p() |> 
+  bold_p() |> 
+  separate_p_footnotes() |> 
+  as_flex_table() |> 
+  save_as_docx(path = "~/gitrepos/mhm-blantyre/result/wilcoxon.docx")
+
+library(labelled)
+
+
+library(labelled)
+library(purrr)
+
+
+# Target label to match
+
+# Load Libraries
+library(ordinal)  # For ordinal regression
+library(tidyverse) # Data manipulation
+library(gtsummary) # Publication-ready tables
+library(car) # For variance inflation factor (VIF)
+
+
+df_clean <- df_clean |> 
+  mutate(rularity = factor(rularity, 
+                            levels = c("Rural",
+                                       "Urban")))
+
+df_clean <- df_clean |> 
+  mutate(
+    have_you_ever_receiv_struation_in_school = fct_collapse(
+      have_you_ever_receiv_struation_in_school,
+      "Yes, in primary school" = c("Yes, in secondary school", "Yes, in primary school"),
+      "No, did not receive education"= c("No, did not receive education about menstruation in school")
+    )
+  ) 
+
+levels(df_clean$have_you_ever_receiv_struation_in_school)
+# Ordinal Logistic Regression Model
+
+rural<-df_clean |> 
+  filter(rularity == "Rural") 
+  
+model <- clm(
+  i_felt_clean_during_my_last_period ~ 
+    during_your_last_men_our_menstrual_period +
+    have_you_ever_receiv_struation_in_school +
+    age  ,
+  data = rural
+)
+
+df_clean$age<-as.numeric(df_clean$age)  # Ensure age is numeric for the model)
+
+# Model Summary
+
+# Publishable Table
+a <- tbl_regression(
+  model,
+  exponentiate = TRUE,
+  label = list(
+    during_your_last_men_our_menstrual_period ~ "Had enough menstruation materials",
+    have_you_ever_receiv_struation_in_school ~ "Received MHM Education in School",
+    age ~ "Age (years)"
+  )
+) %>%
+  bold_p() %>%
+  modify_header(label = "**Predictor**") %>%
+  modify_caption("**Ordinal Regression: Impact of MHM Interventions on Feeling Clean During Menstruation**")
+
+############urban
+urban<-df_clean |> 
+  filter(rularity == "Urban") 
+
+model <- clm(
+  i_felt_clean_during_my_last_period ~ 
+    during_your_last_men_our_menstrual_period +
+    have_you_ever_receiv_struation_in_school +
+    age  ,
+  data = urban
+)
+
+df_clean$age<-as.numeric(df_clean$age)  # Ensure age is numeric for the model)
+
+# Model Summary
+
+# Publishable Table
+b<- tbl_regression(
+  model,
+  exponentiate = TRUE,
+  label = list(
+    during_your_last_men_our_menstrual_period ~ "Had enough menstruation materials",
+    have_you_ever_receiv_struation_in_school ~ "Received MHM Education in School",
+    age ~ "Age (years)"
+  )
+) %>%
+  bold_p() %>%
+  modify_header(label = "**Predictor**") %>%
+  modify_caption("**Ordinal Regression: Impact of MHM Interventions on Feeling Clean During Menstruation**")
+
+tbl_merge(
+  tbls = list(a, b),
+  tab_spanner = c("**Rural**", "**Urban**")) |> 
+  as_flex_table()  |> 
+  save_as_docx(path = "~/gitrepos/mhm-blantyre/result/ordinal_regression.docx")
+df_clean |> 
+  filter(rularity=="Rural") |> 
+  select(i_felt_clean_during_my_last_period,during_your_last_men_our_menstrual_period) |> 
+  tbl_summary(by=during_your_last_men_our_menstrual_period,
+              missing="no") |> 
+  add_p()
+
+df_clean$age<-as.factor(df_clean$age)
+levels(df_clean$age)
+
+############I use a label so that I print out a variable name
+
+target_label <- "Location/Area"
+
+# Find variables with matching labels (no unlist needed)
+matching_vars <- df_clean %>%
+  map_lgl(~ {
+    lbl <- var_label(.x)  # Remove unlist = TRUE
+    if (is.null(lbl)) FALSE else lbl == target_label
+  }) %>%
+  which() %>%
+  names()
+# Print results
+print(matching_vars)
+#########I use a variable name so that I print out a label
+
+
+# Modified workflow with explicit naming -------------------------------------
+
+# 1. Read original question labels (long text headers)
+# data import -------------------------------------------------------------
+# 1. Read original question text (long labels)
+raw_questions_df <- read_csv(here::here("data/raw/survey-labels-real.csv")) |>
+  mutate(across(where(is.character), as_factor))
+
+# 2. Read clean variable names (short codes)
+clean_vars_df <- read_csv(here::here("data/raw/survey-variable-names-real.csv")) |>
+  mutate(across(where(is.character), as_factor)) |>
+  clean_names()
+
+# 3. Preserve original labels
+question_labels <- colnames(raw_questions_df)  # Original full questions
+
+# 4. Create analysis dataframe with clean names
+analysis_df <- raw_questions_df
+colnames(analysis_df) <- colnames(clean_vars_df)  # Apply short variable names
+
+# 5. Build structured output with correct header order
+formatted_output <- analysis_df |>
+  # Convert all data to character first
+  mutate(across(everything(), as.character)) |>
+  # FIRST add variable names (will become row 2)
+  add_row(
+    tibble_row(!!!set_names(colnames(analysis_df), colnames(analysis_df))),
+    .before = 1
+  ) |>
+  # THEN add labels (will become row 1)
+  add_row(
+    tibble_row(!!!set_names(question_labels, colnames(analysis_df))),
+    .before = 1
+  )
+
+# 6. Write to CSV with no headers
+write_excel_csv(
+  formatted_output,
+  here::here("data/raw/survey-structured2.csv"), 
+  col_names = FALSE
+)
+         
+
