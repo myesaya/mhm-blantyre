@@ -467,35 +467,51 @@ tree<-ggplot(c, aes(area = percentage, fill = what_material_did_yo_ead_options_o
   ) +
   facet_wrap(~rularity2)
 
+tree
+
 ggsave("menstral absorbents2.pdf",
        plot = tree,
        width = 8, height = 4.5,
        units = "in", device = "pdf")
 
+###pie chart
 
-what_material_did_yo_ead_options_out_loud
+pie_data <- df_clean |>
+  filter(!is.na(what_material_did_yo_ead_options_out_loud) &
+           what_material_did_yo_ead_options_out_loud != "") |>
+  rename(material = what_material_did_yo_ead_options_out_loud,
+         location = rularity2) |>
+  count(location, material) |>
+  group_by(location) |>
+  mutate(
+    percentage = round(n / sum(n) * 100, 1),
+    # Only store percentage values for labels
+    label_value = if_else(percentage >= 70, paste0(percentage, "%"), "")
+  )
 
-during_your_last_men_materials_after_use
-
-# Example mock dataset
-df <- tibble(
-  composition = c(
-    rep("Disposable pads", 3), rep("Cloth", 3), rep("Cotton wool pads", 2),
-    rep("Tampons", 1), rep("Reusable pads", 1)
-  ),
-  disposal = c("Pit Latrine", "Bin", "Rubbish pit",
-               "Pit Latrine", "Rubbish pit", "Flushed",
-               "Bin", "Rubbish pit",
-               "Flushed", "Bin"),
-  destination = c("Buried", "Burned", "Environment",
-                  "Buried", "Burned", "WWTW",
-                  "Burned", "Environment",
-                  "WWTW", "Landfill"),
-  percent = c(30, 10, 9, 21, 12, 8, 5, 3, 1, 1)
-)
-#I want a sankey diagram
-# Convert to alluvial format
-
+ggplot(pie_data, aes(x = "", y = percentage, fill = material)) +
+  geom_col(width = 1, color = "black", linewidth = 0.5,linejoin = "round") +
+  coord_polar("y", start = 0) +
+  # Show only percentages in slices
+  geom_text(aes(label = label_value), 
+            position = position_stack(vjust = 0.5),
+            size = 5,
+            color = "black",
+            fontface = "bold") +
+  facet_wrap(~location) +
+  labs(
+    title = "Menstrual Absorbents Used",
+    fill = "Material Type"  # Legend title
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 20, face = "bold"),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 11),
+    strip.text = element_text(size = 12, face = "bold")
+  ) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE))
 
 
 
@@ -909,3 +925,102 @@ write_excel_csv(
 )
          
 
+
+#complement poisson model
+# Fit separate models
+poisson_rural <- glm(
+  during_your_last_men_you_miss_school_work ~ 
+    during_your_last_men_menstrual_materials +
+    during_your_last_men_home_or_school_clean + 
+    during_your_last_men_enever_you_wanted_to +
+    i_was_able_to_choose_l_most_wanted_to_use + 
+    i_had_enough_of_my_m_often_as_l_wanted_to +
+    i_was_able_to_wash_m_nds_when_l_wanted_to +
+    i_was_able_to_dispos_way_that_l_wanted_to,
+  family = poisson(link = "log"), 
+  data = filter(df_clean, rularity2 == "Urban")
+)
+
+poisson_urban <- glm(
+  during_your_last_men_you_miss_school_work ~ 
+    during_your_last_men_menstrual_materials +
+    during_your_last_men_home_or_school_clean + 
+    during_your_last_men_enever_you_wanted_to +
+    i_was_able_to_choose_l_most_wanted_to_use + 
+    i_had_enough_of_my_m_often_as_l_wanted_to +
+    i_was_able_to_wash_m_nds_when_l_wanted_to 
+    ,
+  family = poisson(link = "log"), 
+  data = filter(df_clean, rularity2 == "Rural")
+)
+
+# Process models with significance stars
+process_model <- function(model) {
+  tidy(model) |> 
+    mutate(
+      IRR = exp(estimate),
+      p.value = case_when(
+        p.value < 0.001 ~ "<0.001***",
+        p.value < 0.01 ~ sprintf("%.3f**", p.value),
+        p.value < 0.05 ~ sprintf("%.3f*", p.value),
+        TRUE ~ sprintf("%.3f", p.value)
+      )
+    ) |> 
+    select(term, estimate, IRR, p.value)
+}
+
+# Create combined table
+combined_tbl <- bind_rows(
+  process_model(poisson_rural) |> mutate(Model = "Rural"),
+  process_model(poisson_urban) |> mutate(Model = "Urban")
+) |>
+  pivot_wider(
+    names_from = Model,
+    values_from = c(estimate, IRR, p.value),
+    names_glue = "{Model}_{.value}"
+  )
+
+# Format table
+gt_tbl <- combined_tbl |>
+  gt() |>
+  fmt_number(columns = c(Rural_estimate, Urban_estimate), decimals = 3) |>
+  fmt_number(columns = c(Rural_IRR, Urban_IRR), decimals = 2) |>
+  cols_label(
+    term = "Predictor",
+    Rural_estimate = "Coef.",
+    Rural_IRR = "IRR",
+    Rural_p.value = "p-value",
+    Urban_estimate = "Coef.", 
+    Urban_IRR = "IRR",
+    Urban_p.value = "p-value"
+  ) |>
+  tab_spanner(
+    label = "Rural",
+    columns = c(Rural_estimate, Rural_IRR, Rural_p.value)
+  ) |>
+  tab_spanner(
+    label = "Urban",
+    columns = c(Urban_estimate, Urban_IRR, Urban_p.value)
+  ) |>
+  tab_header(
+    title = "Poisson Regression by Location",
+    subtitle = "Stratified analysis of menstrual management factors on school/work absences"
+  ) |>
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(
+      columns = Rural_p.value,
+      rows = Rural_p.value < 0.05
+    )
+  ) |>
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(
+      columns = Urban_p.value,
+      rows = Urban_p.value < 0.05
+    )
+  )
+
+gt_tbl
+
+gt_tbl |> gtsave("stratified_poisson.docx")
