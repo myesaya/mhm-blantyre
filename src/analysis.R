@@ -633,36 +633,25 @@ filtered_data <- df_clean |>
            during_your_last_men_you_miss_school_work < 6) |>  
   left_join(group_stats, by = "rularity")  
 
-# Plot with corrected normal curves  
-hist<-ggplot(filtered_data, aes(x = during_your_last_men_you_miss_school_work)) +  
-  geom_histogram(aes(y = after_stat(count)), binwidth = 1, fill = "skyblue", color = "black") +  
-  geom_line(  
-    data = data.frame(  
-      x = rep(seq(1, 5, 0.1), 2),  
-      rularity = rep(c("Rural", "Urban"), each = 41)  
-    ) |>  
-      left_join(group_stats, by = "rularity"),  
-    aes(  
-      x = x,  
-      y = dnorm(x, mean, sd) * n * 1  
-    ),  
-    color = "red",  
-    size = 1  
-  ) +  
-  scale_x_continuous(breaks = seq(1, 5, 1)) +  
-  # Adjust Y-axis limits and breaks here:  
-  scale_y_continuous(  
-    breaks = c(0, 10, 20, 30),  
-    limits = c(0, 30)  # Extend upper limit to 40  
-  ) +  
-  labs(  
-    title = "school/Social work days missed during last menstruation",  
-    x = "Number of days",  
-    y = "Frequency"  
-  ) +  
-  theme_minimal() +  
-  facet_wrap(~rularity)  
-ggsave("days missed_final.pdf",
+library(ggplot2)
+
+hist<-ggplot(filtered_data, aes(x = during_your_last_men_you_miss_school_work)) +
+  geom_histogram(aes(y = after_stat(count)), binwidth = 1, fill = "skyblue", color = "black") +
+  scale_x_continuous(breaks = seq(1, 5, 1)) +
+  scale_y_continuous(
+    breaks = seq(0, 30, 10),
+    limits = c(0, 30)
+  ) +
+  labs(
+    title = "School/Social Work Days Missed During Last Menstruation",
+    x = "Number of Days",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  facet_wrap(~rularity)
+
+
+ggsave("days missed_final2.pdf",
        plot = hist,
        width = 9, height = 5,
        units = "in", device = "pdf")
